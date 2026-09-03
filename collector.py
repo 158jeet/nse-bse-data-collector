@@ -89,58 +89,45 @@ def nse_urls(d):
     }
 
 
-def bse_url(d):
-    return f"https://www.bseindia.com/download/BhavCopy/Equity/EQ{d.strftime('%d%m%y')}_CSV.ZIP"
-
-
-def bse_fallback_url(d):
-    # Free BSE-derived UDiFF-compatible fallback.  The direct BSE archive
-    # is retained as the preferred source; this is used when BSE blocks
-    # GitHub-hosted runners or the legacy archive is unavailable.
-    return (f"https://mtf.trading/api/v1/bhavcopy?date={d:%Y-%m-%d}"
-            f"&exchange=bse&series=EQ&format=csv&limit=100000")
+def bse_urls(d):
+    ymd = d.strftime("%Y%m%d")
+    ddmmyy = d.strftime("%d%m%y")
+    return [
+        # Current BSE CM-UDiFF-style daily CSV used by maintained BSE clients.
+        f"https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_{ymd}_F_0000.CSV",
+        # Legacy daily equity ZIP retained as a second official BSE source.
+        f"https://www.bseindia.com/download/BhavCopy/Equity/EQ{ddmmyy}_CSV.ZIP",
+    ]
 
 
 def core_available(d):
-    # Download the two files that determine whether this is a usable trading date.
+    # A usable date requires one current NSE CM-UDiFF bhavcopy and one
+    # official BSE equity bhavcopy. We deliberately avoid third-party mirrors.
     probe_dir = OUT / ".probe"
     probe_dir.mkdir(parents=True, exist_ok=True)
-    results = []
-    specs = [
-        ("NSE", "full", ".csv", nse_urls(d)["full"]),
-    ]
-    for exch, kind, ext, url in specs:
-        path = probe_dir / f"{exch.lower()}_{kind}{ext}"
+
+    nse_path = probe_dir / "nse_udiff.zip"
+    try:
+        if not valid(nse_path):
+            curl_download(nse_urls(d)["udiff"], nse_path)
+        nse_ok = valid(nse_path)
+    except Exception:
+        nse_ok = False
+
+    bse_ok = False
+    for i, url in enumerate(bse_urls(d), 1):
+        ext = ".zip" if url.lower().endswith(".zip") else ".csv"
+        path = probe_dir / f"bse_{i}{ext}"
         try:
             if not valid(path):
                 curl_download(url, path)
-            ok = valid(path)
-            results.append((exch, kind, url, path if ok else None, ok))
+            if valid(path):
+                bse_ok = True
+                break
         except Exception:
-            results.append((exch, kind, url, None, False))
-
-    # BSE direct archive first. If the exchange blocks the GitHub runner,
-    # use the free UDiFF-compatible BSE EOD mirror as a network fallback.
-    bse_direct = probe_dir / "bse_equity_bhavcopy.ZIP"
-    bse_ok = False
-    try:
-        if not valid(bse_direct):
-            curl_download(bse_url(d), bse_direct)
-        bse_ok = valid(bse_direct)
-    except Exception:
-        bse_ok = False
-    if bse_ok:
-        results.append(("BSE", "equity_bhavcopy", bse_url(d), bse_direct, True))
-    else:
-        bse_fallback = probe_dir / "bse_equity_bhavcopy_fallback.csv"
-        try:
-            if not valid(bse_fallback):
-                curl_download(bse_fallback_url(d), bse_fallback)
-            ok = valid(bse_fallback)
-            results.append(("BSE", "equity_bhavcopy", bse_fallback_url(d), bse_fallback if ok else None, ok))
-        except Exception:
-            results.append(("BSE", "equity_bhavcopy", bse_fallback_url(d), None, False))
-    return results
+            pass
+    return [("NSE", "udiff", nse_urls(d)["udiff"], nse_path if nse_ok else None, nse_ok),
+            ("BSE", "equity_bhavcopy", bse_urls(d)[0], None if not bse_ok else path, bse_ok)]
 
 
 def collect_for_date(d, lines):
@@ -172,31 +159,28 @@ def collect_for_date(d, lines):
             log(lines, f"WARN {exch:3} {kind:20} {e}")
         records.append(rec)
 
-    # BSE direct archive, then free UDiFF-compatible fallback if direct access
-    # is blocked from the GitHub runner.
-    bse_targets = [
-        ("bse_equity_bhavcopy.ZIP", bse_url(d), "bse_direct"),
-        ("bse_equity_bhavcopy_fallback.csv", bse_fallback_url(d), "bse_udiff_fallback"),
-    ]
+    # BSE official daily CM-UDiFF-style CSV first, then official legacy ZIP.
     bse_rec = None
-    for filename, url, source in bse_targets:
-        out = day / filename
+    for i, url in enumerate(bse_urls(d), 1):
+        suffix = ".ZIP" if url.lower().endswith(".zip") else ".CSV"
+        out = day / f"bse_equity_bhavcopy_{i}{suffix}"
         try:
             if not valid(out):
                 curl_download(url, out)
             if valid(out):
-                bse_rec = {"exchange":"BSE", "kind":"equity_bhavcopy", "source":source,
-                           "url":url, "file":str(out.relative_to(ROOT)),
-                           "status":"ok", "bytes":out.stat().st_size,
+                bse_rec = {"exchange":"BSE", "kind":"equity_bhavcopy",
+                           "source":"official_bse", "url":url,
+                           "file":str(out.relative_to(ROOT)), "status":"ok",
+                           "bytes":out.stat().st_size,
                            "sha256":hashlib.sha256(out.read_bytes()).hexdigest()}
-                log(lines, f"OK   BSE equity_bhavcopy ({source}) {bse_rec['bytes']:>10} bytes")
+                log(lines, f"OK   BSE equity_bhavcopy source-{i} {bse_rec['bytes']:>10} bytes")
                 break
         except Exception as e:
-            log(lines, f"WARN BSE {source:20} {e}")
+            log(lines, f"WARN BSE source-{i} {e}")
     if bse_rec is None:
-        bse_rec = {"exchange":"BSE", "kind":"equity_bhavcopy", "source":"direct+fallback",
-                   "url":bse_url(d), "file":"", "status":"failed",
-                   "error":"BSE direct archive and fallback unavailable"}
+        bse_rec = {"exchange":"BSE", "kind":"equity_bhavcopy",
+                   "source":"official_bse", "url":bse_urls(d)[0], "file":"",
+                   "status":"failed", "error":"Official BSE sources unavailable"}
     records.append(bse_rec)
     (day / "manifest.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
     return records
