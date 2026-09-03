@@ -59,36 +59,39 @@ jobs:
           day = Path(os.environ["DAY"])
           latest = Path("latest")
           CHUNK = 300
-          OUT_COLS = [
-              "exchange","symbol","isin","series",
-              "open","high","low","close","prev_close",
-              "volume","value","trades"
-          ]
+          OUT_COLS = ["exchange","symbol","isin","series","open","high","low","close","prev_close","volume","value","trades"]
 
           def clean(v):
               return "" if v is None else str(v).strip()
+
+          def num(v):
+              try: return float(clean(v).replace(",", ""))
+              except: return None
 
           def rows_from(path, exchange):
               with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
                   r = csv.DictReader(f)
                   for row in r:
+                      # Both current NSE and BSE UDiFF files use these fields.
+                      # Keep only ordinary cash-market equity shares, not debt/units.
                       if clean(row.get("FinInstrmTp")) != "STK":
                           continue
                       isin = clean(row.get("ISIN"))
-                      if not isin.startswith("INE"):
+                      symbol = clean(row.get("TckrSymb"))
+                      series = clean(row.get("SctySrs"))
+                      close = num(row.get("ClsPric"))
+                      if not isin.startswith("INE") or not symbol or close is None:
+                          continue
+                      if exchange == "NSE" and series not in {"EQ","BE"}:
+                          continue
+                      if exchange == "BSE" and series in {"F","G","GB","GS","MF","ETF"}:
                           continue
                       yield {
-                          "exchange": exchange,
-                          "symbol": clean(row.get("TckrSymb")),
-                          "isin": isin,
-                          "series": clean(row.get("SctySrs")),
-                          "open": clean(row.get("OpnPric")),
-                          "high": clean(row.get("HghPric")),
-                          "low": clean(row.get("LwPric")),
-                          "close": clean(row.get("ClsPric")),
+                          "exchange": exchange, "symbol": symbol, "isin": isin, "series": series,
+                          "open": clean(row.get("OpnPric")), "high": clean(row.get("HghPric")),
+                          "low": clean(row.get("LwPric")), "close": clean(row.get("ClsPric")),
                           "prev_close": clean(row.get("PrvsClsgPric")),
-                          "volume": clean(row.get("TtlTradgVol")),
-                          "value": clean(row.get("TtlTrfVal")),
+                          "volume": clean(row.get("TtlTradgVol")), "value": clean(row.get("TtlTrfVal")),
                           "trades": clean(row.get("TtlNbOfTxsExctd")),
                       }
 
@@ -99,46 +102,34 @@ jobs:
                   p = latest / f"{prefix}_{n:03d}.csv"
                   with p.open("w", encoding="utf-8", newline="") as f:
                       w = csv.DictWriter(f, fieldnames=OUT_COLS)
-                      w.writeheader()
-                      w.writerows(rows[start:start+CHUNK])
+                      w.writeheader(); w.writerows(rows[start:start+CHUNK])
               return len(rows)
 
-          nse_path = Path("/tmp/nse_udiff.csv")
-          bse_path = Path("/tmp/bse_equity.csv")
+          nse_path, bse_path = Path("/tmp/nse_udiff.csv"), Path("/tmp/bse_equity.csv")
           nse_count = write_chunks(rows_from(nse_path, "NSE"), "nse_equity") if nse_path.exists() else 0
           bse_count = write_chunks(rows_from(bse_path, "BSE"), "bse_equity") if bse_path.exists() else 0
 
+          # Compact 52-week file; it is supplementary to the equity OHLCV data.
           p52 = day / "nse_52w.csv"
           if p52.exists():
               with p52.open("r", encoding="utf-8-sig", errors="replace", newline="") as f:
-                  allrows = list(csv.reader(f))
-              if len(allrows) >= 3:
-                  header = [clean(x) for x in allrows[2]]
+                  raw = list(csv.reader(f))
+              if len(raw) >= 3:
+                  header = [clean(x) for x in raw[2]]
                   data = []
-                  for row in allrows[3:]:
-                      if not row or not row[0].strip():
-                          continue
+                  for row in raw[3:]:
                       rec = dict(zip(header, row))
-                      if clean(rec.get("SYMBOL")):
-                          data.append([
-                              clean(rec.get("SYMBOL")), clean(rec.get("SERIES")),
-                              clean(rec.get("Adjusted_52_Week_High")), clean(rec.get("52_Week_High_Date")),
-                              clean(rec.get("Adjusted_52_Week_Low")), clean(rec.get("52_Week_Low_DT")),
-                          ])
+                      sym = clean(rec.get("SYMBOL"))
+                      if sym:
+                          data.append([sym, clean(rec.get("SERIES")), clean(rec.get("Adjusted_52_Week_High")), clean(rec.get("52_Week_High_Date")), clean(rec.get("Adjusted_52_Week_Low")), clean(rec.get("52_Week_Low_DT"))])
                   for n, start in enumerate(range(0, len(data), CHUNK), 1):
-                      out = latest / f"nse_52w_{n:03d}.csv"
-                      with out.open("w", encoding="utf-8", newline="") as f:
-                          w = csv.writer(f)
-                          w.writerow(["symbol","series","52w_high","52w_high_date","52w_low","52w_low_date"])
-                          w.writerows(data[start:start+CHUNK])
+                      with (latest / f"nse_52w_{n:03d}.csv").open("w", encoding="utf-8", newline="") as f:
+                          w = csv.writer(f); w.writerow(["symbol","series","52w_high","52w_high_date","52w_low","52w_low_date"]); w.writerows(data[start:start+CHUNK])
 
           (latest / "README.txt").write_text(
-              f"Trading date: {day.name}\n"
-              f"NSE equity rows: {nse_count}\n"
-              f"BSE equity rows: {bse_count}\n"
-              "Files are compact exchange-data handoffs; no ranking or trading decisions are generated here.\n",
-              encoding="utf-8"
-          )
+              f"Trading date: {day.name}\nNSE equity rows: {nse_count}\nBSE equity rows: {bse_count}\n"
+              "Classification is data-only: no ranking, scoring or trading decisions are generated here.\n",
+              encoding="utf-8")
           PY
 
           cp "$DAY/manifest.json" latest/manifest.json
@@ -152,7 +143,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No latest-data changes to commit."
           else
-            git commit -m "Update compact NSE BSE market handoff"
+            git commit -m "Update classified NSE BSE market handoff"
             git push
           fi
 
