@@ -4,9 +4,8 @@ from datetime import date
 import collector
 
 ast.parse(Path("collector.py").read_text(encoding="utf-8"))
-assert collector.bse_url(date(2026,9,3)).endswith("EQ030926_CSV.ZIP")
-assert "date=2026-09-03" in collector.bse_fallback_url(date(2026,9,3))
-assert "exchange=bse" in collector.bse_fallback_url(date(2026,9,3))
+assert collector.bse_urls(date(2026,9,3))[0].endswith("BhavCopy_BSE_CM_0_0_0_20260903_F_0000.CSV")
+assert collector.bse_urls(date(2026,9,3))[1].endswith("EQ030926_CSV.ZIP")
 u=collector.nse_urls(date(2026,9,3))
 assert u["udiff"].endswith("_20260903_F_0000.csv.zip")
 assert u["full"].endswith("sec_bhavdata_full_03092026.csv")
