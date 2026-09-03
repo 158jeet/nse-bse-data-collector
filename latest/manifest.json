@@ -1,0 +1,70 @@
+[
+  {
+    "exchange": "NSE",
+    "kind": "udiff",
+    "url": "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20260902_F_0000.csv.zip",
+    "file": "output/2026-09-02/nse_udiff.zip",
+    "status": "ok",
+    "bytes": 203453,
+    "sha256": "6647705d6435c19590848e7e457746c59f526131ff8a31d1da633227625754a4"
+  },
+  {
+    "exchange": "NSE",
+    "kind": "full",
+    "url": "https://nsearchives.nseindia.com/content/cm/sec_bhavdata_full_02092026.csv",
+    "file": "output/2026-09-02/nse_full.csv",
+    "status": "failed",
+    "error": "curl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404"
+  },
+  {
+    "exchange": "NSE",
+    "kind": "52w",
+    "url": "https://nsearchives.nseindia.com/content/CM_52_wk_High_low_02092026.csv",
+    "file": "output/2026-09-02/nse_52w.csv",
+    "status": "ok",
+    "bytes": 316243,
+    "sha256": "2fbb5152ccd1b1a834c6aecb4b8f0be9a3c30bdd3d7add4642e471c1fc2ab0d3"
+  },
+  {
+    "exchange": "NSE",
+    "kind": "delivery",
+    "url": "https://nsearchives.nseindia.com/content/nsccl/MTO_02092026.DAT",
+    "file": "output/2026-09-02/nse_delivery.DAT",
+    "status": "failed",
+    "error": "curl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404"
+  },
+  {
+    "exchange": "NSE",
+    "kind": "market_activity",
+    "url": "https://nsearchives.nseindia.com/content/cm/MA260902.csv",
+    "file": "output/2026-09-02/nse_market_activity.csv",
+    "status": "failed",
+    "error": "curl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404"
+  },
+  {
+    "exchange": "NSE",
+    "kind": "volatility",
+    "url": "https://nsearchives.nseindia.com/content/CMVOLT_260902.CSV",
+    "file": "output/2026-09-02/nse_volatility.CSV",
+    "status": "failed",
+    "error": "curl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404"
+  },
+  {
+    "exchange": "NSE",
+    "kind": "security",
+    "url": "https://nsearchives.nseindia.com/content/cm/NSE_CM_security_20260902.csv.gz",
+    "file": "output/2026-09-02/nse_security.gz",
+    "status": "failed",
+    "error": "curl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404\ncurl: (22) The requested URL returned error: 404"
+  },
+  {
+    "exchange": "BSE",
+    "kind": "equity_bhavcopy",
+    "source": "official_bse",
+    "url": "https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_20260902_F_0000.CSV",
+    "file": "output/2026-09-02/bse_equity_bhavcopy_1.CSV",
+    "status": "ok",
+    "bytes": 855862,
+    "sha256": "33c79124f8158a24e73b0b1195aaf119e247ed7c48a928d2c4bebad3f7c5684c"
+  }
+]
