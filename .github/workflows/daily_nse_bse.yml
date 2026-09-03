@@ -24,42 +24,124 @@ jobs:
       - name: Collect NSE and BSE data
         run: python3 collector.py
 
-      - name: Prepare latest data for ChatGPT
+      - name: Prepare compact market handoff
         shell: bash
         run: |
           set -e
           rm -rf latest
           mkdir -p latest
           DAY=$(ls -1d output/20*-*-* | sort | tail -1)
+          export DAY
           echo "Selected folder: $DAY"
+
           if [ -f "$DAY/nse_udiff.zip" ]; then
-            mkdir -p latest/_nse_udiff
-            unzip -o "$DAY/nse_udiff.zip" -d latest/_nse_udiff >/dev/null
-            find latest/_nse_udiff -type f -iname '*.csv' -print -quit | xargs -r -I{} cp "{}" latest/nse_udiff.csv
-            rm -rf latest/_nse_udiff
+            mkdir -p /tmp/nse_udiff
+            unzip -o "$DAY/nse_udiff.zip" -d /tmp/nse_udiff >/dev/null
+            find /tmp/nse_udiff -type f -iname '*.csv' -print -quit | xargs -r -I{} cp "{}" /tmp/nse_udiff.csv
           fi
-          [ -f "$DAY/nse_full.csv" ] && cp "$DAY/nse_full.csv" latest/nse_full.csv || true
-          [ -f "$DAY/nse_52w.csv" ] && cp "$DAY/nse_52w.csv" latest/nse_52w.csv || true
-          [ -f "$DAY/nse_delivery.DAT" ] && cp "$DAY/nse_delivery.DAT" latest/nse_delivery.DAT || true
-          [ -f "$DAY/nse_market_activity.csv" ] && cp "$DAY/nse_market_activity.csv" latest/nse_market_activity.csv || true
-          [ -f "$DAY/nse_volatility.CSV" ] && cp "$DAY/nse_volatility.CSV" latest/nse_volatility.CSV || true
-          [ -f "$DAY/nse_security.gz" ] && cp "$DAY/nse_security.gz" latest/nse_security.gz || true
+
           BSE_FILE=$(find "$DAY" -maxdepth 1 -type f -iname 'bse_equity_bhavcopy_*' | sort | head -1 || true)
           if [ -n "$BSE_FILE" ]; then
             case "$BSE_FILE" in
               *.zip|*.ZIP)
-                mkdir -p latest/_bse
-                unzip -o "$BSE_FILE" -d latest/_bse >/dev/null
-                find latest/_bse -type f \( -iname '*.csv' -o -iname '*.CSV' \) -print -quit | xargs -r -I{} cp "{}" latest/bse_equity.csv
-                rm -rf latest/_bse
+                mkdir -p /tmp/bse
+                unzip -o "$BSE_FILE" -d /tmp/bse >/dev/null
+                find /tmp/bse -type f \( -iname '*.csv' -o -iname '*.CSV' \) -print -quit | xargs -r -I{} cp "{}" /tmp/bse_equity.csv
                 ;;
-              *) cp "$BSE_FILE" latest/bse_equity.csv ;;
+              *) cp "$BSE_FILE" /tmp/bse_equity.csv ;;
             esac
           fi
+
+          python3 - <<'PY'
+          import csv, os
+          from pathlib import Path
+
+          day = Path(os.environ["DAY"])
+          latest = Path("latest")
+          CHUNK = 300
+          OUT_COLS = [
+              "exchange","symbol","isin","series",
+              "open","high","low","close","prev_close",
+              "volume","value","trades"
+          ]
+
+          def clean(v):
+              return "" if v is None else str(v).strip()
+
+          def rows_from(path, exchange):
+              with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
+                  r = csv.DictReader(f)
+                  for row in r:
+                      if clean(row.get("FinInstrmTp")) != "STK":
+                          continue
+                      isin = clean(row.get("ISIN"))
+                      if not isin.startswith("INE"):
+                          continue
+                      yield {
+                          "exchange": exchange,
+                          "symbol": clean(row.get("TckrSymb")),
+                          "isin": isin,
+                          "series": clean(row.get("SctySrs")),
+                          "open": clean(row.get("OpnPric")),
+                          "high": clean(row.get("HghPric")),
+                          "low": clean(row.get("LwPric")),
+                          "close": clean(row.get("ClsPric")),
+                          "prev_close": clean(row.get("PrvsClsgPric")),
+                          "volume": clean(row.get("TtlTradgVol")),
+                          "value": clean(row.get("TtlTrfVal")),
+                          "trades": clean(row.get("TtlNbOfTxsExctd")),
+                      }
+
+          def write_chunks(rows, prefix):
+              rows = list(rows)
+              rows.sort(key=lambda x: (x["symbol"], x["exchange"]))
+              for n, start in enumerate(range(0, len(rows), CHUNK), 1):
+                  p = latest / f"{prefix}_{n:03d}.csv"
+                  with p.open("w", encoding="utf-8", newline="") as f:
+                      w = csv.DictWriter(f, fieldnames=OUT_COLS)
+                      w.writeheader()
+                      w.writerows(rows[start:start+CHUNK])
+              return len(rows)
+
+          nse_path = Path("/tmp/nse_udiff.csv")
+          bse_path = Path("/tmp/bse_equity.csv")
+          nse_count = write_chunks(rows_from(nse_path, "NSE"), "nse_equity") if nse_path.exists() else 0
+          bse_count = write_chunks(rows_from(bse_path, "BSE"), "bse_equity") if bse_path.exists() else 0
+
+          p52 = day / "nse_52w.csv"
+          if p52.exists():
+              with p52.open("r", encoding="utf-8-sig", errors="replace", newline="") as f:
+                  allrows = list(csv.reader(f))
+              if len(allrows) >= 3:
+                  header = [clean(x) for x in allrows[2]]
+                  data = []
+                  for row in allrows[3:]:
+                      if not row or not row[0].strip():
+                          continue
+                      rec = dict(zip(header, row))
+                      if clean(rec.get("SYMBOL")):
+                          data.append([
+                              clean(rec.get("SYMBOL")), clean(rec.get("SERIES")),
+                              clean(rec.get("Adjusted_52_Week_High")), clean(rec.get("52_Week_High_Date")),
+                              clean(rec.get("Adjusted_52_Week_Low")), clean(rec.get("52_Week_Low_DT")),
+                          ])
+                  for n, start in enumerate(range(0, len(data), CHUNK), 1):
+                      out = latest / f"nse_52w_{n:03d}.csv"
+                      with out.open("w", encoding="utf-8", newline="") as f:
+                          w = csv.writer(f)
+                          w.writerow(["symbol","series","52w_high","52w_high_date","52w_low","52w_low_date"])
+                          w.writerows(data[start:start+CHUNK])
+
+          (latest / "README.txt").write_text(
+              f"Trading date: {day.name}\n"
+              f"NSE equity rows: {nse_count}\n"
+              f"BSE equity rows: {bse_count}\n"
+              "Files are compact exchange-data handoffs; no ranking or trading decisions are generated here.\n",
+              encoding="utf-8"
+          )
+          PY
+
           cp "$DAY/manifest.json" latest/manifest.json
-          printf 'Latest trading folder: %s\n' "$DAY" > latest/README.txt
-          printf 'Source: official NSE/BSE exchange files collected by GitHub Actions.\n' >> latest/README.txt
-          printf 'The latest directory is the machine-readable handoff for ChatGPT analysis.\n' >> latest/README.txt
 
       - name: Publish latest data to repository
         shell: bash
@@ -70,7 +152,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No latest-data changes to commit."
           else
-            git commit -m "Update latest NSE BSE market data"
+            git commit -m "Update compact NSE BSE market handoff"
             git push
           fi
 
