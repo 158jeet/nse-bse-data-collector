@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths-ignore:
       - "latest/**"
+      - "history/**"
 
 permissions:
   contents: write
@@ -15,7 +16,7 @@ permissions:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - name: Checkout collector
@@ -23,6 +24,9 @@ jobs:
 
       - name: Collect NSE and BSE data
         run: python3 collector.py
+
+      - name: Build historical EOD archive
+        run: python3 backfill_history.py
 
       - name: Prepare compact market handoff
         shell: bash
@@ -72,8 +76,6 @@ jobs:
               with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
                   r = csv.DictReader(f)
                   for row in r:
-                      # Both current NSE and BSE UDiFF files use these fields.
-                      # Keep only ordinary cash-market equity shares, not debt/units.
                       if clean(row.get("FinInstrmTp")) != "STK":
                           continue
                       isin = clean(row.get("ISIN"))
@@ -109,7 +111,6 @@ jobs:
           nse_count = write_chunks(rows_from(nse_path, "NSE"), "nse_equity") if nse_path.exists() else 0
           bse_count = write_chunks(rows_from(bse_path, "BSE"), "bse_equity") if bse_path.exists() else 0
 
-          # Compact 52-week file; it is supplementary to the equity OHLCV data.
           p52 = day / "nse_52w.csv"
           if p52.exists():
               with p52.open("r", encoding="utf-8-sig", errors="replace", newline="") as f:
@@ -128,22 +129,23 @@ jobs:
 
           (latest / "README.txt").write_text(
               f"Trading date: {day.name}\nNSE equity rows: {nse_count}\nBSE equity rows: {bse_count}\n"
+              "Historical EOD archive is stored under history/YYYY-MM-DD/.\n"
               "Classification is data-only: no ranking, scoring or trading decisions are generated here.\n",
               encoding="utf-8")
           PY
 
           cp "$DAY/manifest.json" latest/manifest.json
 
-      - name: Publish latest data to repository
+      - name: Publish latest data and history
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add latest
+          git add latest history
           if git diff --cached --quiet; then
-            echo "No latest-data changes to commit."
+            echo "No data changes to commit."
           else
-            git commit -m "Update classified NSE BSE market handoff"
+            git commit -m "Update NSE BSE EOD data and history"
             git push
           fi
 
