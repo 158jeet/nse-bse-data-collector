@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: "30 13 * * 1-5"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "latest/**"
 
 permissions:
   contents: write
@@ -28,22 +32,18 @@ jobs:
           mkdir -p latest
           DAY=$(ls -1d output/20*-*-* | sort | tail -1)
           echo "Selected folder: $DAY"
-
-          # NSE current UDiFF bhavcopy is distributed as a ZIP containing CSV data.
           if [ -f "$DAY/nse_udiff.zip" ]; then
             mkdir -p latest/_nse_udiff
             unzip -o "$DAY/nse_udiff.zip" -d latest/_nse_udiff >/dev/null
             find latest/_nse_udiff -type f -iname '*.csv' -print -quit | xargs -r -I{} cp "{}" latest/nse_udiff.csv
             rm -rf latest/_nse_udiff
           fi
-
           [ -f "$DAY/nse_full.csv" ] && cp "$DAY/nse_full.csv" latest/nse_full.csv || true
           [ -f "$DAY/nse_52w.csv" ] && cp "$DAY/nse_52w.csv" latest/nse_52w.csv || true
           [ -f "$DAY/nse_delivery.DAT" ] && cp "$DAY/nse_delivery.DAT" latest/nse_delivery.DAT || true
           [ -f "$DAY/nse_market_activity.csv" ] && cp "$DAY/nse_market_activity.csv" latest/nse_market_activity.csv || true
           [ -f "$DAY/nse_volatility.CSV" ] && cp "$DAY/nse_volatility.CSV" latest/nse_volatility.CSV || true
           [ -f "$DAY/nse_security.gz" ] && cp "$DAY/nse_security.gz" latest/nse_security.gz || true
-
           BSE_FILE=$(find "$DAY" -maxdepth 1 -type f -iname 'bse_equity_bhavcopy_*' | sort | head -1 || true)
           if [ -n "$BSE_FILE" ]; then
             case "$BSE_FILE" in
@@ -56,7 +56,6 @@ jobs:
               *) cp "$BSE_FILE" latest/bse_equity.csv ;;
             esac
           fi
-
           cp "$DAY/manifest.json" latest/manifest.json
           printf 'Latest trading folder: %s\n' "$DAY" > latest/README.txt
           printf 'Source: official NSE/BSE exchange files collected by GitHub Actions.\n' >> latest/README.txt
