@@ -1,3 +1,4 @@
-Latest trading folder: output/2026-09-02
-Source: official NSE/BSE exchange files collected by GitHub Actions.
-The latest directory is the machine-readable handoff for ChatGPT analysis.
+Trading date: 2026-09-02
+NSE equity rows: 3174
+BSE equity rows: 4666
+Files are compact exchange-data handoffs; no ranking or trading decisions are generated here.
