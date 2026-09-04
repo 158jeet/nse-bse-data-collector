@@ -134,7 +134,8 @@ jobs:
               encoding="utf-8")
           PY
 
-          cp "$DAY/manifest.json" latest/manifest.json
+      - name: Generate full-universe technical snapshot
+        run: python3 technical_snapshot.py
 
       - name: Publish latest data and history
         shell: bash
