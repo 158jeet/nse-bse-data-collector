@@ -137,6 +137,21 @@ jobs:
       - name: Generate full-universe technical snapshot
         run: python3 technical_snapshot.py
 
+      - name: Build single full-universe CSV
+        shell: bash
+        run: |
+          set -e
+          files=$(find latest -maxdepth 1 -type f -name 'technical_snapshot_*.csv' | sort)
+          first=$(printf '%s\n' "$files" | head -1)
+          test -n "$first"
+          cat "$first" > latest/FULL_UNIVERSE_TECHNICAL_SNAPSHOT.csv
+          printf '%s\n' "$files" | tail -n +2 | while IFS= read -r f; do
+            tail -n +2 "$f" >> latest/FULL_UNIVERSE_TECHNICAL_SNAPSHOT.csv
+          done
+          rows=$(($(wc -l < latest/FULL_UNIVERSE_TECHNICAL_SNAPSHOT.csv) - 1))
+          echo "Consolidated technical rows: $rows"
+          echo "Consolidated file: latest/FULL_UNIVERSE_TECHNICAL_SNAPSHOT.csv"
+
       - name: Publish latest data and history
         shell: bash
         run: |
