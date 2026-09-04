@@ -169,6 +169,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nse-bse-daily-${{ github.run_id }}
-          path: output/bundle_*.zip
+          path: |
+            output/bundle_*.zip
+            latest/FULL_UNIVERSE_TECHNICAL_SNAPSHOT.csv
           if-no-files-found: error
           retention-days: 14
