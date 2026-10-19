@@ -1,0 +1,2 @@
+exchange,symbol,isin,series,date,close,prev_close,volume,value,trades,sma20,sma50,sma200,avg_vol20,volume_ratio20,high20,high50,high60,low20,low50,low60,high252,low252,dist_52w_high_pct,dist_52w_low_pct,roc20_pct,roc50_pct,rsi14,atr14_pct,range_pct,close_vs_sma20_pct,close_vs_sma50_pct,close_vs_sma200_pct,sma20_slope20_pct,sma50_slope20_pct
+NSE,ZYDUSWELL,INE768C01028,EQ,2026-10-16,512.75,509.95,52401,26800708.85,4955,509.645,520.409,,163514.55,0.3205,552.9,581,583.5,482,482,482,611.85,482,-16.1968,6.3797,-6.1155,-3.3277,47.0872,3.1922,1.7183,0.6092,-1.4717,,-4.8921,-4.6073
