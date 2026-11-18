@@ -1,5 +1,5 @@
-Trading date: 2026-11-17
-NSE equity rows: 2591
-BSE equity rows: 4370
+Trading date: 2026-11-18
+NSE equity rows: 2587
+BSE equity rows: 4356
 Historical EOD archive is stored under history/YYYY-MM-DD/.
 Classification is data-only: no ranking, scoring or trading decisions are generated here.
